@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 )
 
 /*
@@ -21,12 +22,6 @@ type Account struct {
 	ID      int `json:"id"`
 	Limit   int `json:"limit"`
 	Balance int `json:"balance"`
-}
-type Transfer struct {
-	ID        int       `json:"id"`
-	Sender    Account   `json:"sender"`
-	Recipient Account   `json:"recipient"`
-	Previous  *Transfer `json:"-"`
 }
 type TransferRequest struct {
 	Sender    int `json:"sender"`
@@ -79,7 +74,9 @@ func CreateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	account.ID = len(accounts) + 1
+	mutex.Lock()
 	accounts = append(accounts, &account)
+	mutex.Unlock()
 	if err := json.NewEncoder(w).Encode(account); err != nil {
 		log.Println(err)
 	}
@@ -136,8 +133,10 @@ func TransferAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mutex.Lock()
 	sender.Balance -= amount
 	recipient.Balance += amount
+	mutex.Unlock()
 
 	if err := json.NewEncoder(w).Encode(sender); err != nil {
 		log.Println(err)
@@ -161,11 +160,12 @@ func SendNotFound(w http.ResponseWriter, r *http.Request, message string) {
 }
 
 var accounts []*Account
+var mutex = &sync.Mutex{}
 
 func main() {
 	accounts = append(accounts, &Account{ID: 1, Limit: 0, Balance: 1000})
-	accounts = append(accounts, &Account{ID: 2, Limit: -1000, Balance: 100})
-	accounts = append(accounts, &Account{ID: 3, Limit: 0, Balance: 10000})
+	accounts = append(accounts, &Account{ID: 2, Limit: 0, Balance: 3000})
+	accounts = append(accounts, &Account{ID: 3, Limit: 0, Balance: 0})
 
 	router := mux.NewRouter()
 	router.HandleFunc("/accounts", ListAccounts).Methods("GET")
